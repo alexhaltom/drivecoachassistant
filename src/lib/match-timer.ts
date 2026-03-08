@@ -1,13 +1,17 @@
 /**
  * FIRST Robotics match timer logic.
- * Match length: 2:20 (140 seconds). Hub status depends on AUTO result (Red vs Blue).
+ * Match length: 2:20 (140 seconds), or 2:40 (160 seconds) with Auto period.
+ * Hub status depends on AUTO result (Red vs Blue).
  */
 
 export const MATCH_DURATION_SEC = 140; // 2:20
+export const AUTO_PERIOD_SEC = 20;     // optional 20s at start
+export const MATCH_WITH_AUTO_SEC = MATCH_DURATION_SEC + AUTO_PERIOD_SEC; // 2:40
 
 export type Alliance = 'red' | 'blue';
 
 export type Phase =
+  | 'auto'         // 2:40 – 2:20 (first 20s when Include Auto is on)
   | 'transition'   // 2:20 - 2:10
   | 'shift1'       // 2:10 - 1:45
   | 'shift2'       // 1:45 - 1:20
@@ -25,6 +29,7 @@ export interface PhaseInfo {
 
 // Red alliance won AUTO (scored more FUEL or selected by FMS)
 const RED_WON_AUTO: Record<Phase, { red: boolean; blue: boolean }> = {
+  auto: { red: true, blue: true },
   transition: { red: true, blue: true },
   shift1: { red: false, blue: true },
   shift2: { red: true, blue: false },
@@ -35,6 +40,7 @@ const RED_WON_AUTO: Record<Phase, { red: boolean; blue: boolean }> = {
 
 // Blue alliance won AUTO
 const BLUE_WON_AUTO: Record<Phase, { red: boolean; blue: boolean }> = {
+  auto: { red: true, blue: true },
   transition: { red: true, blue: true },
   shift1: { red: true, blue: false },
   shift2: { red: false, blue: true },
@@ -44,6 +50,7 @@ const BLUE_WON_AUTO: Record<Phase, { red: boolean; blue: boolean }> = {
 };
 
 const PHASE_LABELS: Record<Phase, string> = {
+  auto: 'AUTO',
   transition: 'TRANSITION SHIFT',
   shift1: 'SHIFT 1',
   shift2: 'SHIFT 2',
@@ -53,6 +60,7 @@ const PHASE_LABELS: Record<Phase, string> = {
 };
 
 const PHASE_RANGES: Record<Phase, string> = {
+  auto: '2:40 – 2:20',
   transition: '2:20 – 2:10',
   shift1: '2:10 – 1:45',
   shift2: '1:45 – 1:20',
@@ -61,8 +69,12 @@ const PHASE_RANGES: Record<Phase, string> = {
   endgame: '0:30 – 0:00',
 };
 
-/** Get phase from seconds remaining (140 down to 0). */
-export function getPhaseFromSecondsRemaining(secondsRemaining: number): Phase {
+/** Get phase from seconds remaining. When includeAutoPeriod, total is 160 and first 20s is AUTO. */
+export function getPhaseFromSecondsRemaining(
+  secondsRemaining: number,
+  includeAutoPeriod: boolean
+): Phase {
+  if (includeAutoPeriod && secondsRemaining > MATCH_DURATION_SEC) return 'auto';
   if (secondsRemaining > 130) return 'transition';
   if (secondsRemaining > 105) return 'shift1';
   if (secondsRemaining > 80) return 'shift2';
@@ -91,9 +103,10 @@ export function formatTime(secondsRemaining: number): string {
 /** Full phase info for display. */
 export function getPhaseInfo(
   secondsRemaining: number,
-  redWonAuto: boolean
+  redWonAuto: boolean,
+  includeAutoPeriod: boolean = false
 ): PhaseInfo {
-  const phase = getPhaseFromSecondsRemaining(secondsRemaining);
+  const phase = getPhaseFromSecondsRemaining(secondsRemaining, includeAutoPeriod);
   const hub = getHubStatus(phase, redWonAuto);
   return {
     phase,
@@ -102,4 +115,9 @@ export function getPhaseInfo(
     redHubActive: hub.redHubActive,
     blueHubActive: hub.blueHubActive,
   };
+}
+
+/** Total match duration in seconds (140 or 160). */
+export function getMatchDurationSec(includeAutoPeriod: boolean): number {
+  return includeAutoPeriod ? MATCH_WITH_AUTO_SEC : MATCH_DURATION_SEC;
 }

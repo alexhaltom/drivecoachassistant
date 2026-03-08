@@ -2,18 +2,21 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  MATCH_DURATION_SEC,
+  getMatchDurationSec,
   formatTime,
   getPhaseInfo,
 } from '@/lib/match-timer';
 
 export default function MatchTimerPage() {
-  const [secondsRemaining, setSecondsRemaining] = useState(MATCH_DURATION_SEC);
+  const [includeAutoPeriod, setIncludeAutoPeriod] = useState(false);
+  const [secondsRemaining, setSecondsRemaining] = useState(() =>
+    getMatchDurationSec(false)
+  );
   const [isRunning, setIsRunning] = useState(false);
-  const [redWonAuto, setRedWonAuto] = useState(true); // slider: 0 = Red, 1 = Blue -> redWonAuto = sliderValue === 0
+  const [redWonAuto, setRedWonAuto] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const phaseInfo = getPhaseInfo(secondsRemaining, redWonAuto);
+  const phaseInfo = getPhaseInfo(secondsRemaining, redWonAuto, includeAutoPeriod);
 
   const tick = useCallback(() => {
     setSecondsRemaining((prev) => {
@@ -41,45 +44,55 @@ export default function MatchTimerPage() {
 
   const handleReset = () => {
     setIsRunning(false);
-    setSecondsRemaining(MATCH_DURATION_SEC);
+    setSecondsRemaining(getMatchDurationSec(includeAutoPeriod));
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
   };
 
+  const toggleAutoPeriod = () => {
+    setIncludeAutoPeriod((prev) => {
+      const next = !prev;
+      setSecondsRemaining((s) =>
+        next ? Math.min(s + 20, 160) : Math.min(s, 140)
+      );
+      return next;
+    });
+  };
+
   return (
     <main className="min-h-screen flex flex-col">
-      {/* Top bar: title left, slider right */}
-      <div className="flex items-center justify-between shrink-0 px-4 py-3 md:px-6 md:py-4">
+      {/* Top bar: title left, Auto winner + Include Auto period right */}
+      <div className="flex items-center justify-between shrink-0 px-4 py-3 md:px-6 md:py-4 gap-3 flex-wrap">
         <h1 className="font-display text-lg md:text-xl font-bold tracking-tight text-zinc-100">
           FIRST Match Timer
         </h1>
-        <div className="flex items-center gap-2 md:gap-3 w-32 md:w-40">
-          <span
-            className={`font-display text-xs md:text-sm font-semibold transition-colors ${
-              redWonAuto ? 'text-alliance-red' : 'text-zinc-500'
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRedWonAuto((r) => !r)}
+            className={`px-3 py-1.5 rounded-lg font-display text-sm font-semibold transition-colors border-2 ${
+              redWonAuto
+                ? 'bg-alliance-red/20 border-alliance-red text-alliance-red'
+                : 'bg-alliance-blue/20 border-alliance-blue text-alliance-blue'
             }`}
+            aria-label="Toggle auto winner"
           >
-            Red
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={1}
-            value={redWonAuto ? 0 : 1}
-            onChange={(e) => setRedWonAuto(e.target.value === '0')}
-            className="flex-1 h-2 accent-zinc-500"
-            aria-label="Auto result: Red or Blue"
-          />
-          <span
-            className={`font-display text-xs md:text-sm font-semibold transition-colors ${
-              !redWonAuto ? 'text-alliance-blue' : 'text-zinc-500'
+            Auto: {redWonAuto ? 'Red' : 'Blue'}
+          </button>
+          <button
+            type="button"
+            onClick={toggleAutoPeriod}
+            className={`px-3 py-1.5 rounded-lg font-display text-sm font-semibold transition-colors border-2 ${
+              includeAutoPeriod
+                ? 'bg-zinc-100 text-zinc-900 border-zinc-100'
+                : 'border-zinc-600 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300'
             }`}
+            aria-label="Include 20 second auto period"
           >
-            Blue
-          </span>
+            +20s Auto
+          </button>
         </div>
       </div>
 
