@@ -121,3 +121,38 @@ export function getPhaseInfo(
 export function getMatchDurationSec(includeAutoPeriod: boolean): number {
   return includeAutoPeriod ? MATCH_WITH_AUTO_SEC : MATCH_DURATION_SEC;
 }
+
+/** Hub status letter for unguided view: A=Auto both, T=Transition both, R=Red, B=Blue, E=End game both. */
+export function getHubLetter(
+  phase: Phase,
+  redHubActive: boolean,
+  blueHubActive: boolean
+): 'A' | 'T' | 'R' | 'B' | 'E' {
+  if (phase === 'auto') return 'A';
+  if (phase === 'transition') return 'T';
+  if (phase === 'endgame') return 'E';
+  if (redHubActive && !blueHubActive) return 'R';
+  if (!redHubActive && blueHubActive) return 'B';
+  return 'E'; // fallback both active
+}
+
+/** Seconds remaining in the current phase (phase end is when we hit the next boundary). */
+const PHASE_END_SEC: Record<Phase, number> = {
+  auto: MATCH_DURATION_SEC,       // 140
+  transition: 130,
+  shift1: 105,
+  shift2: 80,
+  shift3: 55,
+  shift4: 30,
+  endgame: 0,
+};
+
+export function getSecondsRemainingInPhase(
+  secondsRemaining: number,
+  phase: Phase,
+  includeAutoPeriod: boolean
+): number {
+  const endSec = PHASE_END_SEC[phase];
+  if (phase === 'auto') return secondsRemaining - endSec; // 160->140, so 20 down to 0
+  return secondsRemaining - endSec;
+}
