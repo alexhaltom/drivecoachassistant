@@ -32,6 +32,15 @@ export default function MatchTimerPage() {
     currentPhase,
     includeAutoPeriod
   );
+  const periodTimeDisplay = formatTime(Math.max(0, secondsInPeriod));
+
+  // Letter color for guided mode: highlight R=red, B=blue
+  const hubLetterColorClass =
+    hubLetter === 'R'
+      ? 'text-alliance-red'
+      : hubLetter === 'B'
+        ? 'text-alliance-blue'
+        : 'text-zinc-100';
 
   const tick = useCallback(() => {
     setSecondsRemaining((prev) => {
@@ -123,102 +132,96 @@ export default function MatchTimerPage() {
         </div>
       </div>
 
-      {/* Main content: Guided (full UI) or Unguided (time + letter + period time only) */}
+      {/* Main content: same layout for both modes; guided adds labels and prominent hub state */}
       <section className="flex-1 flex flex-col items-center justify-center px-4 pb-4">
-        {guided ? (
-          <>
+        {/* Row 1: Match time (same size in both modes) */}
+        {guided && (
+          <p className="text-xs uppercase tracking-wider text-zinc-500 font-body mb-1">
+            Time remaining in match
+          </p>
+        )}
+        <div
+          className="font-display font-bold tabular-nums text-zinc-100 tracking-tight w-full text-center"
+          style={{ fontSize: 'clamp(4rem, 18vw, 14rem)' }}
+        >
+          {formatTime(secondsRemaining)}
+        </div>
+
+        {/* Row 2: Period letter + period time (same size, side by side) */}
+        {guided && (
+          <p className="mt-6 text-xs uppercase tracking-wider text-zinc-500 font-body mb-1">
+            Current period (A=Auto, T=Transition, R=Red hub, B=Blue hub, E=End game)
+          </p>
+        )}
+        <div
+          className="flex items-center justify-center gap-4 md:gap-6 mt-4 flex-wrap"
+          style={{ fontSize: 'clamp(3rem, 12vw, 8rem)', lineHeight: 1 }}
+        >
+          <span
+            className={`font-display font-bold tabular-nums tracking-tight ${guided ? hubLetterColorClass : 'text-zinc-100'}`}
+          >
+            {hubLetter}
+          </span>
+          <span className="font-display font-bold tabular-nums text-zinc-100 tracking-tight">
+            {periodTimeDisplay}
+          </span>
+        </div>
+        {guided && (
+          <p className="mt-1 text-xs uppercase tracking-wider text-zinc-500 font-body">
+            Time left in period
+          </p>
+        )}
+
+        {/* Controls */}
+        <div className="mt-8 flex gap-3">
+          <button
+            type="button"
+            onClick={() => setIsRunning((r) => !r)}
+            className="px-5 py-2 rounded-xl font-display font-semibold text-sm uppercase tracking-wider bg-zinc-100 text-zinc-900 hover:bg-white transition-colors"
+          >
+            {isRunning ? 'Pause' : 'Start'}
+          </button>
+          <button
+            type="button"
+            onClick={handleReset}
+            className="px-5 py-2 rounded-xl font-display font-semibold text-sm uppercase tracking-wider border border-zinc-600 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            Reset
+          </button>
+        </div>
+
+        {/* Guided only: prominent Red/Blue hub status */}
+        {guided && (
+          <div className="mt-8 grid grid-cols-2 gap-4 w-full max-w-lg">
             <div
-              className="font-display font-bold tabular-nums text-zinc-100 tracking-tight w-full text-center"
-              style={{ fontSize: 'clamp(4rem, 18vw, 14rem)' }}
+              className={`rounded-2xl border-[3px] p-5 transition-all ${
+                phaseInfo.redHubActive
+                  ? 'bg-alliance-red/25 border-alliance-red text-alliance-red shadow-lg ring-2 ring-alliance-red/50'
+                  : 'bg-zinc-800/50 border-zinc-700 text-zinc-500'
+              }`}
             >
-              {formatTime(secondsRemaining)}
+              <p className="text-xs uppercase tracking-wider font-body opacity-90 mb-1">
+                Red Alliance Hub
+              </p>
+              <p className="font-display text-2xl font-bold">
+                {phaseInfo.redHubActive ? 'ACTIVE' : 'Inactive'}
+              </p>
             </div>
-            <p className="mt-2 text-sm text-zinc-500 font-body">
-              {phaseInfo.label} <span className="text-zinc-600">({phaseInfo.timeRange})</span>
-            </p>
-            <div className="mt-4 flex gap-3">
-              <button
-                type="button"
-                onClick={() => setIsRunning((r) => !r)}
-                className="px-5 py-2 rounded-xl font-display font-semibold text-sm uppercase tracking-wider bg-zinc-100 text-zinc-900 hover:bg-white transition-colors"
-              >
-                {isRunning ? 'Pause' : 'Start'}
-              </button>
-              <button
-                type="button"
-                onClick={handleReset}
-                className="px-5 py-2 rounded-xl font-display font-semibold text-sm uppercase tracking-wider border border-zinc-600 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300 transition-colors"
-              >
-                Reset
-              </button>
-            </div>
-            <div className="mt-6 grid grid-cols-2 gap-3 w-full max-w-md">
-              <div
-                className={`rounded-xl border-2 p-4 transition-all ${
-                  phaseInfo.redHubActive
-                    ? 'bg-alliance-red/15 border-alliance-red text-alliance-red'
-                    : 'bg-zinc-800/50 border-zinc-700 text-zinc-500'
-                }`}
-              >
-                <p className="text-xs uppercase tracking-wider font-body opacity-80">Red Hub</p>
-                <p className="font-display text-lg font-bold">
-                  {phaseInfo.redHubActive ? 'Active' : 'Inactive'}
-                </p>
-              </div>
-              <div
-                className={`rounded-xl border-2 p-4 transition-all ${
-                  phaseInfo.blueHubActive
-                    ? 'bg-alliance-blue/15 border-alliance-blue text-alliance-blue'
-                    : 'bg-zinc-800/50 border-zinc-700 text-zinc-500'
-                }`}
-              >
-                <p className="text-xs uppercase tracking-wider font-body opacity-80">Blue Hub</p>
-                <p className="font-display text-lg font-bold">
-                  {phaseInfo.blueHubActive ? 'Active' : 'Inactive'}
-                </p>
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
             <div
-              className="font-display font-bold tabular-nums text-zinc-100 tracking-tight w-full text-center"
-              style={{ fontSize: 'clamp(4rem, 18vw, 14rem)' }}
+              className={`rounded-2xl border-[3px] p-5 transition-all ${
+                phaseInfo.blueHubActive
+                  ? 'bg-alliance-blue/25 border-alliance-blue text-alliance-blue shadow-lg ring-2 ring-alliance-blue/50'
+                  : 'bg-zinc-800/50 border-zinc-700 text-zinc-500'
+              }`}
             >
-              {formatTime(secondsRemaining)}
+              <p className="text-xs uppercase tracking-wider font-body opacity-90 mb-1">
+                Blue Alliance Hub
+              </p>
+              <p className="font-display text-2xl font-bold">
+                {phaseInfo.blueHubActive ? 'ACTIVE' : 'Inactive'}
+              </p>
             </div>
-            <p className="mt-4 text-zinc-500 font-body text-sm">
-              Time remaining in match
-            </p>
-            <div
-              className="font-display font-bold text-zinc-100 mt-8 text-center"
-              style={{
-                fontSize: 'clamp(3rem, 12vw, 8rem)',
-                lineHeight: 1,
-              }}
-            >
-              {hubLetter}
-            </div>
-            <p className="mt-2 text-sm text-zinc-500 font-body">
-              Current period · {formatTime(Math.max(0, secondsInPeriod))} left
-            </p>
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={() => setIsRunning((r) => !r)}
-                className="px-5 py-2 rounded-xl font-display font-semibold text-sm uppercase tracking-wider bg-zinc-100 text-zinc-900 hover:bg-white transition-colors"
-              >
-                {isRunning ? 'Pause' : 'Start'}
-              </button>
-              <button
-                type="button"
-                onClick={handleReset}
-                className="px-5 py-2 rounded-xl font-display font-semibold text-sm uppercase tracking-wider border border-zinc-600 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300 transition-colors"
-              >
-                Reset
-              </button>
-            </div>
-          </>
+          </div>
         )}
       </section>
     </main>
