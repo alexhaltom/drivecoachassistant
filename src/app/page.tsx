@@ -87,18 +87,18 @@ export default function MatchTimerPage() {
 
   return (
     <main className="min-h-screen flex flex-col">
-      {/* Top bar: title left, Auto winner + Include Auto period right */}
-      <div className="flex items-center justify-between shrink-0 px-4 py-3 md:px-6 md:py-4 gap-3 flex-wrap">
+      {/* Top bar: logo left, buttons right; shrinks to fit on mobile */}
+      <div className="flex items-center justify-between shrink-0 min-h-0 px-2 py-2 md:px-6 md:py-4 gap-1.5 md:gap-3 flex-nowrap">
         <img
           src="/first_age_frc_rebuilt_wordmark_rgb_white.png"
           alt="Rebuilt presented by HAAS Gene Haas Foundation"
-          className="h-8 md:h-10 w-auto object-contain object-left"
+          className="h-6 md:h-10 w-auto min-w-0 max-w-[40vw] md:max-w-none object-contain object-left shrink-0"
         />
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1 md:gap-2 flex-shrink min-w-0 flex-nowrap">
           <button
             type="button"
             onClick={() => setGuided((g) => !g)}
-            className={`px-3 py-1.5 rounded-lg font-display text-sm font-semibold transition-colors border-2 ${
+            className={`px-1.5 py-1 md:px-3 md:py-1.5 rounded-md md:rounded-lg font-display text-[10px] md:text-sm font-semibold transition-colors border shrink-0 whitespace-nowrap ${
               guided
                 ? 'bg-zinc-100 text-zinc-900 border-zinc-100'
                 : 'border-zinc-600 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300'
@@ -110,19 +110,19 @@ export default function MatchTimerPage() {
           <button
             type="button"
             onClick={() => setRedWonAuto((r) => !r)}
-            className={`px-3 py-1.5 rounded-lg font-display text-sm font-semibold transition-colors border-2 ${
+            className={`px-1.5 py-1 md:px-3 md:py-1.5 rounded-md md:rounded-lg font-display text-[10px] md:text-sm font-semibold transition-colors border shrink-0 whitespace-nowrap ${
               redWonAuto
                 ? 'bg-alliance-red/20 border-alliance-red text-alliance-red'
                 : 'bg-alliance-blue/20 border-alliance-blue text-alliance-blue'
             }`}
             aria-label="Toggle auto winner"
           >
-            Auto Winner: {redWonAuto ? 'Red' : 'Blue'}
+            <span className="sm:hidden">Auto: </span><span className="hidden sm:inline">Auto Winner: </span>{redWonAuto ? 'Red' : 'Blue'}
           </button>
           <button
             type="button"
             onClick={toggleAutoPeriod}
-            className={`px-3 py-1.5 rounded-lg font-display text-sm font-semibold transition-colors border-2 ${
+            className={`px-1.5 py-1 md:px-3 md:py-1.5 rounded-md md:rounded-lg font-display text-[10px] md:text-sm font-semibold transition-colors border shrink-0 whitespace-nowrap ${
               includeAutoPeriod
                 ? 'bg-zinc-100 text-zinc-900 border-zinc-100'
                 : 'border-zinc-600 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300'
@@ -144,7 +144,7 @@ export default function MatchTimerPage() {
         )}
         <div
           className="font-display font-bold tabular-nums text-zinc-100 tracking-tight w-full text-center"
-          style={{ fontSize: 'clamp(4rem, 18vw, 14rem)' }}
+          style={{ fontSize: 'clamp(5.5rem, 26vw, 14rem)' }}
         >
           {formatTime(secondsRemaining)}
         </div>
