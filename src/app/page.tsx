@@ -89,9 +89,11 @@ export default function MatchTimerPage() {
     <main className="min-h-screen flex flex-col">
       {/* Top bar: title left, Auto winner + Include Auto period right */}
       <div className="flex items-center justify-between shrink-0 px-4 py-3 md:px-6 md:py-4 gap-3 flex-wrap">
-        <h1 className="font-display text-lg md:text-xl font-bold tracking-tight text-zinc-100">
-          FIRST Match Timer
-        </h1>
+        <img
+          src="/first_age_frc_rebuilt_wordmark_rgb_white.png"
+          alt="Rebuilt presented by HAAS Gene Haas Foundation"
+          className="h-8 md:h-10 w-auto object-contain object-left"
+        />
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
@@ -101,9 +103,9 @@ export default function MatchTimerPage() {
                 ? 'bg-zinc-100 text-zinc-900 border-zinc-100'
                 : 'border-zinc-600 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300'
             }`}
-            aria-label="Toggle guided mode"
+            aria-label="Toggle guided mode on or off"
           >
-            Guided
+            Guided: {guided ? 'On' : 'Off'}
           </button>
           <button
             type="button"
@@ -115,7 +117,7 @@ export default function MatchTimerPage() {
             }`}
             aria-label="Toggle auto winner"
           >
-            Auto: {redWonAuto ? 'Red' : 'Blue'}
+            Auto Winner: {redWonAuto ? 'Red' : 'Blue'}
           </button>
           <button
             type="button"
