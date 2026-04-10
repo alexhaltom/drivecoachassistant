@@ -26,7 +26,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${orbitron.variable} ${jetbrains.variable}`}>
-      <body className="font-body antialiased bg-zinc-950 text-zinc-100 min-h-screen">
+      <body className="font-body antialiased text-zinc-100 min-h-screen m-0">
         {children}
       </body>
     </html>
