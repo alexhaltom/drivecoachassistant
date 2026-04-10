@@ -16,7 +16,13 @@ import {
 } from '@/lib/match-sounds';
 
 const DEFAULT_BG = '#09090b';
+/** Tailwind zinc-100 — default for timer text */
+const DEFAULT_MAIN_TIMER = '#f4f4f5';
+const DEFAULT_SUB_TIMER = '#f4f4f5';
+
 const BG_STORAGE_KEY = 'dca-bg';
+const MAIN_TIMER_STORAGE_KEY = 'dca-main-timer';
+const SUB_TIMER_STORAGE_KEY = 'dca-sub-timer';
 
 function normalizeHex(input: string): string | null {
   const t = input.trim();
@@ -27,6 +33,56 @@ function normalizeHex(input: string): string | null {
     h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
   }
   return `#${h.toLowerCase()}`;
+}
+
+function ThemeColorRow({
+  label,
+  value,
+  hexDraft,
+  fallback,
+  onPickColor,
+  onHexDraftChange,
+  onHexBlur,
+}: {
+  label: string;
+  value: string;
+  hexDraft: string;
+  fallback: string;
+  onPickColor: (hex: string) => void;
+  onHexDraftChange: (s: string) => void;
+  onHexBlur: () => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-[10px] md:text-xs uppercase tracking-wider text-zinc-500 font-body">
+        {label}
+      </p>
+      <div className="flex gap-2 items-center flex-wrap">
+        <input
+          type="color"
+          value={/^#[0-9a-f]{6}$/i.test(value) ? value : fallback}
+          onChange={(e) => onPickColor(e.target.value)}
+          className="h-9 w-14 cursor-pointer rounded border border-zinc-600 bg-zinc-800 p-0.5 shrink-0"
+          aria-label={`${label} color`}
+        />
+        <input
+          type="text"
+          value={hexDraft}
+          onChange={(e) => onHexDraftChange(e.target.value)}
+          onBlur={onHexBlur}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          spellCheck={false}
+          className="min-w-0 flex-1 rounded-md border border-zinc-600 bg-zinc-800 px-2 py-1.5 font-mono text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-500"
+          placeholder={fallback}
+          autoComplete="off"
+        />
+      </div>
+    </div>
+  );
 }
 
 function PaletteIcon({ className }: { className?: string }) {
@@ -56,16 +112,35 @@ export default function MatchTimerPage() {
   const bgPickerRef = useRef<HTMLDivElement>(null);
 
   const [backgroundColor, setBackgroundColor] = useState(DEFAULT_BG);
+  const [mainTimerColor, setMainTimerColor] = useState(DEFAULT_MAIN_TIMER);
+  const [subTimerColor, setSubTimerColor] = useState(DEFAULT_SUB_TIMER);
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
   const [hexInput, setHexInput] = useState(DEFAULT_BG);
+  const [hexInputMain, setHexInputMain] = useState(DEFAULT_MAIN_TIMER);
+  const [hexInputSub, setHexInputSub] = useState(DEFAULT_SUB_TIMER);
+
+  /** Skip the first persist run: defaults would run before load-from-storage applies and would wipe saved colors. */
+  const themeColorsHydratedRef = useRef(false);
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(BG_STORAGE_KEY);
-      const n = saved ? normalizeHex(saved) : null;
-      if (n) {
-        setBackgroundColor(n);
-        setHexInput(n);
+      const savedBg = localStorage.getItem(BG_STORAGE_KEY);
+      const savedMain = localStorage.getItem(MAIN_TIMER_STORAGE_KEY);
+      const savedSub = localStorage.getItem(SUB_TIMER_STORAGE_KEY);
+      const nb = savedBg ? normalizeHex(savedBg) : null;
+      const nm = savedMain ? normalizeHex(savedMain) : null;
+      const ns = savedSub ? normalizeHex(savedSub) : null;
+      if (nb) {
+        setBackgroundColor(nb);
+        setHexInput(nb);
+      }
+      if (nm) {
+        setMainTimerColor(nm);
+        setHexInputMain(nm);
+      }
+      if (ns) {
+        setSubTimerColor(ns);
+        setHexInputSub(ns);
       }
     } catch {
       /* ignore */
@@ -73,12 +148,18 @@ export default function MatchTimerPage() {
   }, []);
 
   useEffect(() => {
+    if (!themeColorsHydratedRef.current) {
+      themeColorsHydratedRef.current = true;
+      return;
+    }
     try {
       localStorage.setItem(BG_STORAGE_KEY, backgroundColor);
+      localStorage.setItem(MAIN_TIMER_STORAGE_KEY, mainTimerColor);
+      localStorage.setItem(SUB_TIMER_STORAGE_KEY, subTimerColor);
     } catch {
       /* ignore */
     }
-  }, [backgroundColor]);
+  }, [backgroundColor, mainTimerColor, subTimerColor]);
 
   useEffect(() => {
     if (!bgPickerOpen) return;
@@ -104,14 +185,6 @@ export default function MatchTimerPage() {
     includeAutoPeriod
   );
   const periodTimeDisplay = formatTime(Math.max(0, secondsInPeriod));
-
-  // Letter color for guided mode: highlight R=red, B=blue
-  const hubLetterColorClass =
-    hubLetter === 'R'
-      ? 'text-alliance-red'
-      : hubLetter === 'B'
-        ? 'text-alliance-blue'
-        : 'text-zinc-100';
 
   const tick = useCallback(() => {
     setSecondsRemaining((prev) => {
@@ -186,10 +259,12 @@ export default function MatchTimerPage() {
               type="button"
               onClick={() => {
                 setHexInput(backgroundColor);
+                setHexInputMain(mainTimerColor);
+                setHexInputSub(subTimerColor);
                 setBgPickerOpen((o) => !o);
               }}
               className="p-1.5 md:p-2 rounded-md md:rounded-lg border border-zinc-600 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300 transition-colors"
-              aria-label="Background color"
+              aria-label="Colors: background and timers"
               aria-expanded={bgPickerOpen}
               aria-haspopup="dialog"
             >
@@ -197,53 +272,70 @@ export default function MatchTimerPage() {
             </button>
             {bgPickerOpen && (
               <div
-                className="absolute right-0 top-full mt-1 z-50 w-[min(calc(100vw-1rem),16rem)] rounded-lg border border-zinc-600 bg-zinc-900 p-3 shadow-xl"
+                className="absolute right-0 top-full mt-1 z-50 w-[min(calc(100vw-1rem),18rem)] rounded-lg border border-zinc-600 bg-zinc-900 p-3 shadow-xl flex flex-col gap-3"
                 role="dialog"
-                aria-label="Choose background color"
+                aria-label="Choose colors"
               >
-                <p className="text-[10px] md:text-xs uppercase tracking-wider text-zinc-500 font-body mb-2">
-                  Background
-                </p>
-                <div className="flex gap-2 items-center flex-wrap">
-                  <input
-                    type="color"
-                    value={
-                      /^#[0-9a-f]{6}$/i.test(backgroundColor)
-                        ? backgroundColor
-                        : DEFAULT_BG
+                <ThemeColorRow
+                  label="Background"
+                  value={backgroundColor}
+                  hexDraft={hexInput}
+                  fallback={DEFAULT_BG}
+                  onPickColor={(v) => {
+                    setBackgroundColor(v);
+                    setHexInput(v);
+                  }}
+                  onHexDraftChange={setHexInput}
+                  onHexBlur={() => {
+                    const n = normalizeHex(hexInput);
+                    if (n) {
+                      setBackgroundColor(n);
+                      setHexInput(n);
+                    } else {
+                      setHexInput(backgroundColor);
                     }
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setBackgroundColor(v);
-                      setHexInput(v);
-                    }}
-                    className="h-9 w-14 cursor-pointer rounded border border-zinc-600 bg-zinc-800 p-0.5 shrink-0"
-                    aria-label="Pick background color"
-                  />
-                  <input
-                    type="text"
-                    value={hexInput}
-                    onChange={(e) => setHexInput(e.target.value)}
-                    onBlur={() => {
-                      const n = normalizeHex(hexInput);
-                      if (n) {
-                        setBackgroundColor(n);
-                        setHexInput(n);
-                      } else {
-                        setHexInput(backgroundColor);
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        (e.target as HTMLInputElement).blur();
-                      }
-                    }}
-                    spellCheck={false}
-                    className="min-w-0 flex-1 rounded-md border border-zinc-600 bg-zinc-800 px-2 py-1.5 font-mono text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-500"
-                    placeholder="#09090b"
-                    autoComplete="off"
-                  />
-                </div>
+                  }}
+                />
+                <ThemeColorRow
+                  label="Main timer"
+                  value={mainTimerColor}
+                  hexDraft={hexInputMain}
+                  fallback={DEFAULT_MAIN_TIMER}
+                  onPickColor={(v) => {
+                    setMainTimerColor(v);
+                    setHexInputMain(v);
+                  }}
+                  onHexDraftChange={setHexInputMain}
+                  onHexBlur={() => {
+                    const n = normalizeHex(hexInputMain);
+                    if (n) {
+                      setMainTimerColor(n);
+                      setHexInputMain(n);
+                    } else {
+                      setHexInputMain(mainTimerColor);
+                    }
+                  }}
+                />
+                <ThemeColorRow
+                  label="Sub Timer"
+                  value={subTimerColor}
+                  hexDraft={hexInputSub}
+                  fallback={DEFAULT_SUB_TIMER}
+                  onPickColor={(v) => {
+                    setSubTimerColor(v);
+                    setHexInputSub(v);
+                  }}
+                  onHexDraftChange={setHexInputSub}
+                  onHexBlur={() => {
+                    const n = normalizeHex(hexInputSub);
+                    if (n) {
+                      setSubTimerColor(n);
+                      setHexInputSub(n);
+                    } else {
+                      setHexInputSub(subTimerColor);
+                    }
+                  }}
+                />
               </div>
             )}
           </div>
@@ -295,8 +387,11 @@ export default function MatchTimerPage() {
           </p>
         )}
         <div
-          className="timer-text-outline font-display font-bold tabular-nums text-zinc-100 tracking-tight w-full text-center"
-          style={{ fontSize: 'clamp(5.5rem, 26vw, 14rem)' }}
+          className="timer-text-outline font-display font-bold tabular-nums tracking-tight w-full text-center"
+          style={{
+            fontSize: 'clamp(5.5rem, 26vw, 14rem)',
+            color: mainTimerColor,
+          }}
         >
           {formatTime(secondsRemaining)}
         </div>
@@ -312,11 +407,15 @@ export default function MatchTimerPage() {
           style={{ fontSize: 'clamp(3rem, 12vw, 8rem)', lineHeight: 1 }}
         >
           <span
-            className={`timer-text-outline font-display font-bold tabular-nums tracking-tight ${guided ? hubLetterColorClass : 'text-zinc-100'}`}
+            className="timer-text-outline font-display font-bold tabular-nums tracking-tight"
+            style={{ color: subTimerColor }}
           >
             {hubLetter}
           </span>
-          <span className="timer-text-outline font-display font-bold tabular-nums text-zinc-100 tracking-tight">
+          <span
+            className="timer-text-outline font-display font-bold tabular-nums tracking-tight"
+            style={{ color: subTimerColor }}
+          >
             {periodTimeDisplay}
           </span>
         </div>
