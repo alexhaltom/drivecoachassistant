@@ -10,9 +10,10 @@ import {
   getSecondsRemainingInPhase,
 } from '@/lib/match-timer';
 import {
-  MATCH_SOUND_FILES,
   handleMatchClockTickSounds,
-  playMatchSound,
+  playMatchSoundId,
+  resumeMatchAudioFromUserGesture,
+  unlockMatchAudio,
 } from '@/lib/match-sounds';
 
 const DEFAULT_BG = '#09090b';
@@ -222,6 +223,16 @@ export default function MatchTimerPage() {
     prevSecondsRef.current = secondsRemaining;
   }, [secondsRemaining, isRunning, includeAutoPeriod]);
 
+  /** Warm Web Audio on first touch so iOS unlocks before the timer runs (timer callbacks are not a "user gesture"). */
+  useEffect(() => {
+    const warm = () => {
+      resumeMatchAudioFromUserGesture();
+      void unlockMatchAudio();
+    };
+    window.addEventListener('touchstart', warm, { once: true, passive: true });
+    window.addEventListener('click', warm, { once: true });
+  }, []);
+
   const handleReset = () => {
     setIsRunning(false);
     setSecondsRemaining(getMatchDurationSec(includeAutoPeriod));
@@ -429,12 +440,14 @@ export default function MatchTimerPage() {
         <div className="mt-8 flex gap-3">
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
+              resumeMatchAudioFromUserGesture();
               if (!isRunning) {
+                await unlockMatchAudio();
                 if (includeAutoPeriod && secondsRemaining === 160) {
-                  playMatchSound(MATCH_SOUND_FILES.cavalryCharge);
+                  playMatchSoundId('cavalryCharge');
                 } else if (!includeAutoPeriod && secondsRemaining === 140) {
-                  playMatchSound(MATCH_SOUND_FILES.threeBells);
+                  playMatchSoundId('threeBells');
                 }
               }
               setIsRunning((r) => !r);
