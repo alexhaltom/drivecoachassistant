@@ -179,9 +179,20 @@ export function playTeleopTransitionCue(includeAutoPeriod: boolean): void {
 export function handleMatchClockTickSounds(
   prev: number,
   next: number,
-  includeAutoPeriod: boolean
+  includeAutoPeriod: boolean,
+  autoTeleopDelaySec: number = 0
 ): void {
   if (prev <= next) return;
+
+  if (
+    includeAutoPeriod &&
+    autoTeleopDelaySec > 0 &&
+    next === TELEOP_START_SEC &&
+    prev > TELEOP_START_SEC
+  ) {
+    playMatchSoundId('buzzer');
+    return;
+  }
 
   if (next === TELEOP_START_SEC && prev > TELEOP_START_SEC) {
     playTeleopTransitionCue(includeAutoPeriod);

@@ -7,11 +7,14 @@
 export const MATCH_DURATION_SEC = 140; // 2:20
 export const AUTO_PERIOD_SEC = 20;     // optional 20s at start
 export const MATCH_WITH_AUTO_SEC = MATCH_DURATION_SEC + AUTO_PERIOD_SEC; // 2:40
+export const DEFAULT_AUTO_TELEOP_DELAY_SEC = 3;
+export const MAX_AUTO_TELEOP_DELAY_SEC = 60;
 
 export type Alliance = 'red' | 'blue';
 
 export type Phase =
   | 'auto'         // 2:40 – 2:20 (first 20s when Include Auto is on)
+  | 'delay'        // configurable delay between AUTO and teleop
   | 'transition'   // 2:20 - 2:10
   | 'shift1'       // 2:10 - 1:45
   | 'shift2'       // 1:45 - 1:20
@@ -30,6 +33,7 @@ export interface PhaseInfo {
 // Red alliance won AUTO (scored more FUEL or selected by FMS)
 const RED_WON_AUTO: Record<Phase, { red: boolean; blue: boolean }> = {
   auto: { red: true, blue: true },
+  delay: { red: true, blue: true },
   transition: { red: true, blue: true },
   shift1: { red: false, blue: true },
   shift2: { red: true, blue: false },
@@ -41,6 +45,7 @@ const RED_WON_AUTO: Record<Phase, { red: boolean; blue: boolean }> = {
 // Blue alliance won AUTO
 const BLUE_WON_AUTO: Record<Phase, { red: boolean; blue: boolean }> = {
   auto: { red: true, blue: true },
+  delay: { red: true, blue: true },
   transition: { red: true, blue: true },
   shift1: { red: true, blue: false },
   shift2: { red: false, blue: true },
@@ -51,6 +56,7 @@ const BLUE_WON_AUTO: Record<Phase, { red: boolean; blue: boolean }> = {
 
 const PHASE_LABELS: Record<Phase, string> = {
   auto: 'AUTO',
+  delay: 'AUTO / TELEOP DELAY',
   transition: 'TRANSITION SHIFT',
   shift1: 'SHIFT 1',
   shift2: 'SHIFT 2',
@@ -60,7 +66,8 @@ const PHASE_LABELS: Record<Phase, string> = {
 };
 
 const PHASE_RANGES: Record<Phase, string> = {
-  auto: '2:40 – 2:20',
+  auto: 'AUTO period',
+  delay: 'Auto-to-teleop delay',
   transition: '2:20 – 2:10',
   shift1: '2:10 – 1:45',
   shift2: '1:45 – 1:20',
@@ -69,12 +76,21 @@ const PHASE_RANGES: Record<Phase, string> = {
   endgame: '0:30 – 0:00',
 };
 
-/** Get phase from seconds remaining. When includeAutoPeriod, total is 160 and first 20s is AUTO. */
+export function clampAutoTeleopDelaySec(seconds: number): number {
+  if (!Number.isFinite(seconds)) return DEFAULT_AUTO_TELEOP_DELAY_SEC;
+  return Math.max(0, Math.min(MAX_AUTO_TELEOP_DELAY_SEC, Math.round(seconds)));
+}
+
+/** Get phase from seconds remaining. Delay is handled separately because the match clock pauses at 2:20. */
 export function getPhaseFromSecondsRemaining(
   secondsRemaining: number,
-  includeAutoPeriod: boolean
+  includeAutoPeriod: boolean,
+  autoTeleopDelaySec: number = DEFAULT_AUTO_TELEOP_DELAY_SEC
 ): Phase {
-  if (includeAutoPeriod && secondsRemaining > MATCH_DURATION_SEC) return 'auto';
+  void autoTeleopDelaySec;
+  if (includeAutoPeriod && secondsRemaining > MATCH_DURATION_SEC) {
+    return 'auto';
+  }
   if (secondsRemaining > 130) return 'transition';
   if (secondsRemaining > 105) return 'shift1';
   if (secondsRemaining > 80) return 'shift2';
@@ -104,9 +120,14 @@ export function formatTime(secondsRemaining: number): string {
 export function getPhaseInfo(
   secondsRemaining: number,
   redWonAuto: boolean,
-  includeAutoPeriod: boolean = false
+  includeAutoPeriod: boolean = false,
+  autoTeleopDelaySec: number = DEFAULT_AUTO_TELEOP_DELAY_SEC
 ): PhaseInfo {
-  const phase = getPhaseFromSecondsRemaining(secondsRemaining, includeAutoPeriod);
+  const phase = getPhaseFromSecondsRemaining(
+    secondsRemaining,
+    includeAutoPeriod,
+    autoTeleopDelaySec
+  );
   const hub = getHubStatus(phase, redWonAuto);
   return {
     phase,
@@ -117,18 +138,23 @@ export function getPhaseInfo(
   };
 }
 
-/** Total match duration in seconds (140 or 160). */
-export function getMatchDurationSec(includeAutoPeriod: boolean): number {
+/** Total match duration in seconds. Auto-to-teleop delay pauses the clock and is not included here. */
+export function getMatchDurationSec(
+  includeAutoPeriod: boolean,
+  autoTeleopDelaySec: number = DEFAULT_AUTO_TELEOP_DELAY_SEC
+): number {
+  void autoTeleopDelaySec;
   return includeAutoPeriod ? MATCH_WITH_AUTO_SEC : MATCH_DURATION_SEC;
 }
 
-/** Hub status letter for unguided view: A=Auto both, T=Transition both, R=Red, B=Blue, E=End game both. */
+/** Hub status letter for unguided view: A=Auto, D=Delay, T=Transition, R=Red, B=Blue, E=End game. */
 export function getHubLetter(
   phase: Phase,
   redHubActive: boolean,
   blueHubActive: boolean
-): 'A' | 'T' | 'R' | 'B' | 'E' {
+): 'A' | 'D' | 'T' | 'R' | 'B' | 'E' {
   if (phase === 'auto') return 'A';
+  if (phase === 'delay') return 'D';
   if (phase === 'transition') return 'T';
   if (phase === 'endgame') return 'E';
   if (redHubActive && !blueHubActive) return 'R';
@@ -138,7 +164,8 @@ export function getHubLetter(
 
 /** Seconds remaining in the current phase (phase end is when we hit the next boundary). */
 const PHASE_END_SEC: Record<Phase, number> = {
-  auto: MATCH_DURATION_SEC,       // 140
+  auto: MATCH_DURATION_SEC,
+  delay: MATCH_DURATION_SEC,
   transition: 130,
   shift1: 105,
   shift2: 80,
@@ -150,9 +177,12 @@ const PHASE_END_SEC: Record<Phase, number> = {
 export function getSecondsRemainingInPhase(
   secondsRemaining: number,
   phase: Phase,
-  includeAutoPeriod: boolean
+  includeAutoPeriod: boolean,
+  autoTeleopDelaySec: number = DEFAULT_AUTO_TELEOP_DELAY_SEC
 ): number {
-  const endSec = PHASE_END_SEC[phase];
-  if (phase === 'auto') return secondsRemaining - endSec; // 160->140, so 20 down to 0
+  void includeAutoPeriod;
+  void autoTeleopDelaySec;
+  const endSec = phase === 'auto' ? MATCH_DURATION_SEC : PHASE_END_SEC[phase];
+  if (phase === 'auto') return secondsRemaining - endSec;
   return secondsRemaining - endSec;
 }
