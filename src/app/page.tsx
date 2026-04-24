@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  DEFAULT_AUTO_TELEOP_DELAY_SEC,
+  MATCH_DURATION_SEC,
+  MAX_AUTO_TELEOP_DELAY_SEC,
+  clampAutoTeleopDelaySec,
   getMatchDurationSec,
   formatTime,
   getPhaseInfo,
@@ -24,6 +28,8 @@ const DEFAULT_SUB_TIMER = '#f4f4f5';
 const BG_STORAGE_KEY = 'dca-bg';
 const MAIN_TIMER_STORAGE_KEY = 'dca-main-timer';
 const SUB_TIMER_STORAGE_KEY = 'dca-sub-timer';
+const TIMER_OUTLINE_STORAGE_KEY = 'dca-timer-outline';
+const AUTO_TELEOP_DELAY_STORAGE_KEY = 'dca-auto-teleop-delay-sec';
 
 function normalizeHex(input: string): string | null {
   const t = input.trim();
@@ -103,18 +109,27 @@ function PaletteIcon({ className }: { className?: string }) {
 export default function MatchTimerPage() {
   const [guided, setGuided] = useState(true);
   const [includeAutoPeriod, setIncludeAutoPeriod] = useState(false);
+  const [autoTeleopDelaySec, setAutoTeleopDelaySec] = useState(
+    DEFAULT_AUTO_TELEOP_DELAY_SEC
+  );
   const [secondsRemaining, setSecondsRemaining] = useState(() =>
     getMatchDurationSec(false)
   );
+  const [autoTeleopDelayRemaining, setAutoTeleopDelayRemaining] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [redWonAuto, setRedWonAuto] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevSecondsRef = useRef<number | null>(null);
+  const secondsRemainingRef = useRef(secondsRemaining);
+  const autoTeleopDelayRemainingRef = useRef(autoTeleopDelayRemaining);
+  const includeAutoPeriodRef = useRef(includeAutoPeriod);
+  const autoTeleopDelaySecRef = useRef(autoTeleopDelaySec);
   const bgPickerRef = useRef<HTMLDivElement>(null);
 
   const [backgroundColor, setBackgroundColor] = useState(DEFAULT_BG);
   const [mainTimerColor, setMainTimerColor] = useState(DEFAULT_MAIN_TIMER);
   const [subTimerColor, setSubTimerColor] = useState(DEFAULT_SUB_TIMER);
+  const [timerOutlineEnabled, setTimerOutlineEnabled] = useState(false);
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
   const [hexInput, setHexInput] = useState(DEFAULT_BG);
   const [hexInputMain, setHexInputMain] = useState(DEFAULT_MAIN_TIMER);
@@ -124,10 +139,27 @@ export default function MatchTimerPage() {
   const themeColorsHydratedRef = useRef(false);
 
   useEffect(() => {
+    secondsRemainingRef.current = secondsRemaining;
+  }, [secondsRemaining]);
+
+  useEffect(() => {
+    autoTeleopDelayRemainingRef.current = autoTeleopDelayRemaining;
+  }, [autoTeleopDelayRemaining]);
+
+  useEffect(() => {
+    includeAutoPeriodRef.current = includeAutoPeriod;
+  }, [includeAutoPeriod]);
+
+  useEffect(() => {
+    autoTeleopDelaySecRef.current = autoTeleopDelaySec;
+  }, [autoTeleopDelaySec]);
+
+  useEffect(() => {
     try {
       const savedBg = localStorage.getItem(BG_STORAGE_KEY);
       const savedMain = localStorage.getItem(MAIN_TIMER_STORAGE_KEY);
       const savedSub = localStorage.getItem(SUB_TIMER_STORAGE_KEY);
+      const savedOutline = localStorage.getItem(TIMER_OUTLINE_STORAGE_KEY);
       const nb = savedBg ? normalizeHex(savedBg) : null;
       const nm = savedMain ? normalizeHex(savedMain) : null;
       const ns = savedSub ? normalizeHex(savedSub) : null;
@@ -143,6 +175,9 @@ export default function MatchTimerPage() {
         setSubTimerColor(ns);
         setHexInputSub(ns);
       }
+      if (savedOutline !== null) {
+        setTimerOutlineEnabled(savedOutline === 'true');
+      }
     } catch {
       /* ignore */
     }
@@ -157,10 +192,37 @@ export default function MatchTimerPage() {
       localStorage.setItem(BG_STORAGE_KEY, backgroundColor);
       localStorage.setItem(MAIN_TIMER_STORAGE_KEY, mainTimerColor);
       localStorage.setItem(SUB_TIMER_STORAGE_KEY, subTimerColor);
+      localStorage.setItem(
+        TIMER_OUTLINE_STORAGE_KEY,
+        String(timerOutlineEnabled)
+      );
     } catch {
       /* ignore */
     }
-  }, [backgroundColor, mainTimerColor, subTimerColor]);
+  }, [backgroundColor, mainTimerColor, subTimerColor, timerOutlineEnabled]);
+
+  useEffect(() => {
+    try {
+      const savedDelay = localStorage.getItem(AUTO_TELEOP_DELAY_STORAGE_KEY);
+      if (savedDelay === null) return;
+      const nextDelay = clampAutoTeleopDelaySec(Number(savedDelay));
+      autoTeleopDelaySecRef.current = nextDelay;
+      setAutoTeleopDelaySec(nextDelay);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        AUTO_TELEOP_DELAY_STORAGE_KEY,
+        String(autoTeleopDelaySec)
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [autoTeleopDelaySec]);
 
   useEffect(() => {
     if (!bgPickerOpen) return;
@@ -173,30 +235,85 @@ export default function MatchTimerPage() {
     return () => document.removeEventListener('mousedown', close);
   }, [bgPickerOpen]);
 
-  const phaseInfo = getPhaseInfo(secondsRemaining, redWonAuto, includeAutoPeriod);
-  const currentPhase = getPhaseFromSecondsRemaining(secondsRemaining, includeAutoPeriod);
+  const autoTeleopDelayActive =
+    includeAutoPeriod && autoTeleopDelayRemaining > 0;
+  const phaseInfo = autoTeleopDelayActive
+    ? {
+        phase: 'delay' as const,
+        label: 'AUTO / TELEOP DELAY',
+        timeRange: 'Auto-to-teleop delay',
+        redHubActive: true,
+        blueHubActive: true,
+      }
+    : getPhaseInfo(
+        secondsRemaining,
+        redWonAuto,
+        includeAutoPeriod,
+        autoTeleopDelaySec
+      );
+  const currentPhase = autoTeleopDelayActive
+    ? 'delay'
+    : getPhaseFromSecondsRemaining(
+        secondsRemaining,
+        includeAutoPeriod,
+        autoTeleopDelaySec
+      );
   const hubLetter = getHubLetter(
     currentPhase,
     phaseInfo.redHubActive,
     phaseInfo.blueHubActive
   );
-  const secondsInPeriod = getSecondsRemainingInPhase(
-    secondsRemaining,
-    currentPhase,
-    includeAutoPeriod
-  );
+  const secondsInPeriod = autoTeleopDelayActive
+    ? autoTeleopDelayRemaining
+    : getSecondsRemainingInPhase(
+        secondsRemaining,
+        currentPhase,
+        includeAutoPeriod,
+        autoTeleopDelaySec
+      );
   const periodTimeDisplay = formatTime(Math.max(0, secondsInPeriod));
+  const timerTextClass = `${
+    timerOutlineEnabled ? 'timer-text-outline ' : ''
+  }font-display font-bold tabular-nums tracking-tight`;
 
   const tick = useCallback(() => {
-    setSecondsRemaining((prev) => {
-      if (prev <= 0) {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        intervalRef.current = null;
-        setIsRunning(false);
-        return 0;
+    const seconds = secondsRemainingRef.current;
+    const delayRemaining = autoTeleopDelayRemainingRef.current;
+    const includeAuto = includeAutoPeriodRef.current;
+    const delaySec = autoTeleopDelaySecRef.current;
+
+    if (seconds <= 0) {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = null;
+      setIsRunning(false);
+      return;
+    }
+
+    if (includeAuto && delayRemaining > 0) {
+      const nextDelayRemaining = delayRemaining - 1;
+      autoTeleopDelayRemainingRef.current = nextDelayRemaining;
+      setAutoTeleopDelayRemaining(nextDelayRemaining);
+      if (nextDelayRemaining === 0) {
+        playMatchSoundId('threeBells');
       }
-      return prev - 1;
-    });
+      return;
+    }
+
+    if (
+      includeAuto &&
+      delaySec > 0 &&
+      seconds === MATCH_DURATION_SEC + 1
+    ) {
+      secondsRemainingRef.current = MATCH_DURATION_SEC;
+      autoTeleopDelayRemainingRef.current = delaySec;
+      setSecondsRemaining(MATCH_DURATION_SEC);
+      setAutoTeleopDelayRemaining(delaySec);
+      return;
+    }
+
+    const nextSeconds = seconds - 1;
+    secondsRemainingRef.current = nextSeconds;
+    setSecondsRemaining(nextSeconds);
   }, []);
 
   useEffect(() => {
@@ -218,10 +335,15 @@ export default function MatchTimerPage() {
     }
     const prev = prevSecondsRef.current ?? secondsRemaining;
     if (prev > secondsRemaining) {
-      handleMatchClockTickSounds(prev, secondsRemaining, includeAutoPeriod);
+      handleMatchClockTickSounds(
+        prev,
+        secondsRemaining,
+        includeAutoPeriod,
+        autoTeleopDelaySec
+      );
     }
     prevSecondsRef.current = secondsRemaining;
-  }, [secondsRemaining, isRunning, includeAutoPeriod]);
+  }, [secondsRemaining, isRunning, includeAutoPeriod, autoTeleopDelaySec]);
 
   /** Warm Web Audio on first touch so iOS unlocks before the timer runs (timer callbacks are not a "user gesture"). */
   useEffect(() => {
@@ -235,7 +357,11 @@ export default function MatchTimerPage() {
 
   const handleReset = () => {
     setIsRunning(false);
-    setSecondsRemaining(getMatchDurationSec(includeAutoPeriod));
+    const resetSeconds = getMatchDurationSec(includeAutoPeriod, autoTeleopDelaySec);
+    autoTeleopDelayRemainingRef.current = 0;
+    secondsRemainingRef.current = resetSeconds;
+    setAutoTeleopDelayRemaining(0);
+    setSecondsRemaining(resetSeconds);
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -243,13 +369,32 @@ export default function MatchTimerPage() {
   };
 
   const toggleAutoPeriod = () => {
-    setIncludeAutoPeriod((prev) => {
-      const next = !prev;
-      setSecondsRemaining((s) =>
-        next ? Math.min(s + 20, 160) : Math.min(s, 140)
-      );
-      return next;
-    });
+    const next = !includeAutoPeriod;
+    const teleopOnlyDuration = getMatchDurationSec(false);
+    const withAutoDuration = getMatchDurationSec(true, autoTeleopDelaySec);
+    const addedTime = withAutoDuration - teleopOnlyDuration;
+    const nextSeconds = next
+      ? Math.min(secondsRemaining + addedTime, withAutoDuration)
+      : Math.min(secondsRemaining, teleopOnlyDuration);
+
+    includeAutoPeriodRef.current = next;
+    autoTeleopDelayRemainingRef.current = 0;
+    secondsRemainingRef.current = nextSeconds;
+    setIncludeAutoPeriod(next);
+    setAutoTeleopDelayRemaining(0);
+    setSecondsRemaining(nextSeconds);
+  };
+
+  const handleAutoTeleopDelayChange = (value: string) => {
+    const nextDelay = clampAutoTeleopDelaySec(Number(value));
+    const nextDelayRemaining =
+      autoTeleopDelayRemaining > 0
+        ? Math.min(autoTeleopDelayRemaining, nextDelay)
+        : 0;
+    autoTeleopDelaySecRef.current = nextDelay;
+    autoTeleopDelayRemainingRef.current = nextDelayRemaining;
+    setAutoTeleopDelaySec(nextDelay);
+    setAutoTeleopDelayRemaining(nextDelayRemaining);
   };
 
   return (
@@ -347,6 +492,16 @@ export default function MatchTimerPage() {
                     }
                   }}
                 />
+                <label className="flex items-center justify-between gap-3 rounded-md border border-zinc-700 bg-zinc-800/60 px-3 py-2 font-body text-xs text-zinc-300">
+                  <span>Black number outline</span>
+                  <input
+                    type="checkbox"
+                    checked={timerOutlineEnabled}
+                    onChange={(e) => setTimerOutlineEnabled(e.target.checked)}
+                    className="h-4 w-4 accent-zinc-100"
+                    aria-label="Toggle black number outline"
+                  />
+                </label>
               </div>
             )}
           </div>
@@ -386,6 +541,21 @@ export default function MatchTimerPage() {
           >
             +20s Auto
           </button>
+          <label className="flex items-center gap-1 rounded-md md:rounded-lg border border-zinc-600 px-1.5 py-1 md:px-2 md:py-1.5 font-display text-[10px] md:text-sm font-semibold text-zinc-400 shrink-0 whitespace-nowrap">
+            <span className="hidden sm:inline">Delay</span>
+            <span className="sm:hidden">Dly</span>
+            <input
+              type="number"
+              min={0}
+              max={MAX_AUTO_TELEOP_DELAY_SEC}
+              step={1}
+              value={autoTeleopDelaySec}
+              onChange={(e) => handleAutoTeleopDelayChange(e.target.value)}
+              className="w-10 rounded bg-zinc-800 px-1 py-0.5 text-center text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-500"
+              aria-label="Auto to teleop delay in seconds"
+            />
+            <span>s</span>
+          </label>
         </div>
       </div>
 
@@ -398,7 +568,7 @@ export default function MatchTimerPage() {
           </p>
         )}
         <div
-          className="timer-text-outline font-display font-bold tabular-nums tracking-tight w-full text-center"
+          className={`${timerTextClass} w-full text-center`}
           style={{
             fontSize: 'clamp(5.5rem, 26vw, 14rem)',
             color: mainTimerColor,
@@ -410,7 +580,7 @@ export default function MatchTimerPage() {
         {/* Row 2: Period letter + period time (same size, side by side) */}
         {guided && (
           <p className="mt-6 text-xs uppercase tracking-wider text-zinc-500 font-body mb-1">
-            Current period (A=Auto, T=Transition, R=Red hub, B=Blue hub, E=End game)
+            Current period (A=Auto, D=Delay, T=Transition, R=Red hub, B=Blue hub, E=End game)
           </p>
         )}
         <div
@@ -418,13 +588,13 @@ export default function MatchTimerPage() {
           style={{ fontSize: 'clamp(3rem, 12vw, 8rem)', lineHeight: 1 }}
         >
           <span
-            className="timer-text-outline font-display font-bold tabular-nums tracking-tight"
+            className={timerTextClass}
             style={{ color: subTimerColor }}
           >
             {hubLetter}
           </span>
           <span
-            className="timer-text-outline font-display font-bold tabular-nums tracking-tight"
+            className={timerTextClass}
             style={{ color: subTimerColor }}
           >
             {periodTimeDisplay}
@@ -444,7 +614,11 @@ export default function MatchTimerPage() {
               resumeMatchAudioFromUserGesture();
               if (!isRunning) {
                 await unlockMatchAudio();
-                if (includeAutoPeriod && secondsRemaining === 160) {
+                if (
+                  includeAutoPeriod &&
+                  secondsRemaining ===
+                    getMatchDurationSec(true, autoTeleopDelaySec)
+                ) {
                   playMatchSoundId('cavalryCharge');
                 } else if (!includeAutoPeriod && secondsRemaining === 140) {
                   playMatchSoundId('threeBells');

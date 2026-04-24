@@ -13,7 +13,6 @@ body {
   font-feature-settings: "rlig" 1, "calt" 1;
 }
 
-/* Black outline so timer digits stay readable on any background color */
 .timer-text-outline {
   -webkit-text-stroke: clamp(1.5px, 0.055em, 16px) #000;
   paint-order: stroke fill;
